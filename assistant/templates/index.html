@@ -1,0 +1,224 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant PWA</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Web App Manifest -->
+    <link rel="manifest" href="{% static 'manifest.json' %}">
+    <meta name="theme-color" content="#212529">
+</head>
+<body class="bg-light d-flex flex-column h-100">
+
+    <!-- Navbar / Header -->
+    <nav class="navbar navbar-dark bg-dark px-3 shadow-sm">
+        <span class="navbar-brand mb-0 h1 d-flex align-items-center gap-2">
+            🤖 <span>AI ASSISTANT</span>
+        </span>
+        <span id="online-status" class="badge bg-success px-2 py-1">Online</span>
+    </nav>
+
+    <!-- Main Chat Area -->
+    <main class="container my-3 flex-grow-1 overflow-auto" id="chat-container" style="max-height: 72vh;">
+        <!-- Default Initial Message -->
+        <div class="card mb-3 p-3 border-0 shadow-sm bg-white">
+            <small class="text-muted fw-bold mb-1">CLASS ASSISTANT • Lesson Helper</small>
+            <p class="mb-0">
+                Hi! Ready to explore today's science prompt? You can ask me any question about photosynthesis, cells, or plant life cycles to help with your worksheet.
+            </p>
+        </div>
+    </main>
+
+    <!-- Fixed Bottom Input Area -->
+    <footer class="mt-auto bg-white border-top py-3">
+        <div class="container">
+            <!-- Offline Banner Alert (Hidden by Default) -->
+            <div id="offline-alert" class="alert alert-warning py-1 px-3 mb-2 d-none text-center" role="alert">
+                <small>⚠️ You are currently offline. You can view past messages, but new AI prompts require internet.</small>
+            </div>
+
+            <!-- Prompt Input Form -->
+            <form id="chat-form" onsubmit="return false;">
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="user-input" 
+                        class="form-control" 
+                        placeholder="Ask a question for class..." 
+                        autocomplete="off" 
+                        required
+                    >
+                    <button class="btn btn-outline-secondary" type="button" id="clear-btn">Clear</button>
+                    <button class="btn btn-dark" type="submit" id="send-btn">
+                        <span id="btn-text">Send</span>
+                        <span id="btn-spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                    </button>
+                </div>
+            </form>
+
+            <div class="text-center mt-2">
+                <small class="text-muted">Safe Student Mode • Offline PWA Ready</small>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript Execution Block -->
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const btnText = document.getElementById('btn-text');
+        const btnSpinner = document.getElementById('btn-spinner');
+        const clearBtn = document.getElementById('clear-btn');
+        const statusBadge = document.getElementById('online-status');
+        const offlineAlert = document.getElementById('offline-alert');
+        const chatForm = document.getElementById('chat-form');
+
+        // --- 1. Offline / Online Network Status Detection ---
+        function updateOnlineStatus() {
+            if (navigator.onLine) {
+                statusBadge.textContent = "Online";
+                statusBadge.className = "badge bg-success px-2 py-1";
+                offlineAlert.classList.add('d-none');
+                sendBtn.disabled = false;
+            } else {
+                statusBadge.textContent = "Offline PWA";
+                statusBadge.className = "badge bg-danger px-2 py-1";
+                offlineAlert.classList.remove('d-none');
+            }
+        }
+
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        updateOnlineStatus(); // Initial check
+
+        // --- 2. Helper Functions for Chat UI ---
+        function appendUserMessage(promptText) {
+            const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const html = `
+                <div class="d-flex justify-content-end mb-3">
+                    <div class="card p-3 bg-dark text-white border-0 shadow-sm" style="max-width: 80%;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-white-50 fw-bold">YOU (STUDENT)</small>
+                            <small class="text-white-50 ms-2" style="font-size: 0.75rem;">${timeString}</small>
+                        </div>
+                        <p class="mb-0">${escapeHtml(promptText)}</p>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        }
+
+        function appendAiMessage(replyText) {
+            const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const html = `
+                <div class="d-flex justify-content-start mb-3">
+                    <div class="card p-3 bg-white border-0 shadow-sm" style="max-width: 85%;">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <small class="text-muted fw-bold">CLASS ASSISTANT</small>
+                            <small class="text-muted ms-2" style="font-size: 0.75rem;">${timeString}</small>
+                        </div>
+                        <p class="mb-0" style="white-space: pre-wrap;">${escapeHtml(replyText)}</p>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        }
+
+        function appendErrorMessage(errorText) {
+            const html = `
+                <div class="d-flex justify-content-start mb-3">
+                    <div class="card p-3 bg-danger text-white border-0 shadow-sm" style="max-width: 85%;">
+                        <small class="fw-bold mb-1">SYSTEM ERROR</small>
+                        <p class="mb-0">${escapeHtml(errorText)}</p>
+                    </div>
+                </div>
+            `;
+            chatContainer.insertAdjacentHTML('beforeend', html);
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // --- 3. Form Submission & API Request ---
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const promptText = userInput.value.trim();
+            if (!promptText) return;
+
+            if (!navigator.onLine) {
+                appendErrorMessage("Cannot send prompt while offline. Please reconnect to the internet.");
+                return;
+            }
+
+            // Append user prompt to screen and reset input
+            appendUserMessage(promptText);
+            userInput.value = '';
+
+            // Loading state
+            sendBtn.disabled = true;
+            btnText.textContent = "Generating...";
+            btnSpinner.classList.remove('d-none');
+
+            try {
+                const response = await fetch('/api/generate/', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt: promptText })
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    appendAiMessage(data.reply);
+                } else {
+                    appendErrorMessage(data.message || "Failed to generate AI response.");
+                }
+            } catch (err) {
+                appendErrorMessage("A network error occurred while reaching the backend.");
+            } finally {
+                // Reset button state
+                sendBtn.disabled = false;
+                btnText.textContent = "Send";
+                btnSpinner.classList.add('d-none');
+                userInput.focus();
+            }
+        });
+
+        // Clear input button action
+        clearBtn.addEventListener('click', () => {
+            userInput.value = '';
+            userInput.focus();
+        });
+
+        // --- 4. Register PWA Service Worker ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(reg => console.log('Service Worker registered with scope:', reg.scope))
+                    .catch(err => console.error('Service Worker registration failed:', err));
+            });
+        }
+    </script>
+</body>
+</html>
